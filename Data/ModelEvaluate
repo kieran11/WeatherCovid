@@ -1,0 +1,9 @@
+structure(list(Models = c("CovidBayesianStdCensus", "CovidBayesian10Census", 
+"CovidBayesian10", "CovidBayesianStd"), elpd_diff = structure(c(0, 
+-1.70426445170121, -3.6213934490803, -3.93905874734734), class = c("compare.loo", 
+"matrix", "array")), se_diff = structure(c(0, 0.943935818489931, 
+5.0198744134114, 4.9508421424669), class = c("compare.loo", "matrix", 
+"array")), ModelWeights = c(CovidBayesianStdCensus = 0.814253972454086, 
+CovidBayesian10Census = 0.148117795248773, CovidBayesian10 = 0.021777533689604, 
+CovidBayesianStd = 0.0158506986075373)), row.names = c(NA, -4L
+), class = c("tbl_df", "tbl", "data.frame"))

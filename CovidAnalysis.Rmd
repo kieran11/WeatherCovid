@@ -1,0 +1,415 @@
+---
+title: "CovidWeather"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+
+## Analysis:
+
+The purpose of this analysis is to evaluate the impact of our three weather metrics on **new** Covid-19 cases in California. The complete and large dataset can be found [here](https://www.dropbox.com/preview/Public/WeatherData/WeatherCases.csv?role=personal).
+
+```{r analysis}
+
+library(dplyr)
+library(brms)
+library(bayesplot)
+library(ggplot2)
+library(tidyr)
+library(rlang)
+library(gt)
+
+lags <- function(var, n=10){
+  var <- enquo(var)
+  
+  indices <- seq_len(n)
+  purrr::map( indices, ~quo(lag(!!var, !!.x)) ) %>% 
+    purrr::set_names(sprintf("lag_%s_%02d", quo_text(var), indices))
+  
+}
+
+
+ExtraVariables = dget("Data/ExtraVariables")
+CasesWeather = dget( "Data/AnalysisDataSet")
+
+Analysis = CasesWeather %>% 
+  group_by( fips) %>% 
+  mutate(PrevDayCases = lag(cases),
+         PrevDayCases =ifelse(is.na(PrevDayCases), 0, PrevDayCases ) ,
+         Days = row_number() ) %>% 
+  ungroup() %>% 
+  mutate(NewCases = cases - PrevDayCases) %>% 
+  group_by(fips) %>% 
+  mutate(Lag_NewCases = lag(NewCases),
+         !!!lags(Stages, 14)) %>% 
+  ungroup() %>% 
+  inner_join(ExtraVariables, by = c("fips" = "GEOID")) %>% 
+  na.omit(.) %>% 
+  mutate_at(vars(starts_with("lag_p"), starts_with("lag_t"), Lag_NewCases,
+                 MedianAge, MedianIncome) , ~scale(.x)[,1]) %>% 
+  mutate(lag_temp_sqr = lag_temperatureMax_06**2) 
+  
+  
+
+```
+
+The basic California model will hypothesize that the Stages of each opening should increase new cases after a week. Similarly, weather should work in a similar pattern. Better weather should encourage more outdoor activity, and we should see a drop in cases up until a certain point. Temperature rises beyond a certain point will have a positive association with new cases as it encourages more indoor activity. 
+
+The first step is to determine the model. The main choices of the model are the lag number. Does the temperature three days prior have a greater influence on new Covid-19 cases than the temperature 13 days prior? Ideally, we would use a log likelihood model. However, the models are not nested, and thus we do not use a log likelihood test. A nested models contains the previous model within it. 
+
+
+```{r covidmdl}
+
+
+FindModelLags = function(x) {
+  
+  MdlNoInt = as.formula(paste("NewCases ~ Lag_NewCases ", paste0("lag_temperatureMax_", x) , 
+                   paste0("lag_Stages_",x), "(1|fips)", "(1|Days)",sep = "+") )
+  
+  MdlInt = as.formula(paste("NewCases ~ Lag_NewCases ", 
+                            paste0("lag_temperatureMax_", x, "*", 
+                                   paste0("lag_precipIntensity_", x)) , 
+                   paste0("lag_Stages_",x), "(1|fips)", "(1|Days)",sep = "+") )
+  
+  
+ModelCovid = lme4::lmer(MdlNoInt, 
+                        data = Analysis)
+
+ModelCovidInt = lme4::lmer(MdlInt, 
+                        data = Analysis)
+  
+FinalMdl = tibble( 
+  AICNoInt = broom::glance(ModelCovid) %>% select(AIC) %>% pull(AIC),
+  AICInt = broom::glance(ModelCovidInt) %>% select(AIC) %>% pull(AIC),
+  Lags = x)
+
+
+return(FinalMdl)
+}
+
+LagModels = purrr::map(as.list(sprintf("%02d", seq(1,14,1))), FindModelLags) %>% 
+  bind_rows(.) %>% 
+  tidyr::gather(Mdl, Val, AICNoInt, AICInt) %>% 
+  arrange(Val)
+
+```
+
+As we can see, the model with a six day lag has the lowest AIC, and it will be the model we evaluate. 
+
+```{r BestMdl}
+
+head(LagModels) %>% 
+  gt::gt()
+
+```
+
+After deciding on the number of lags, we try modeling an interaction between temperature and precipitation intensity. We also try a second order polynomial as previously described. 
+
+```{r FinalFreqMdl}
+
+
+FnlMdlNoInt = lme4::lmer(as.formula(paste("NewCases ~ Lag_NewCases ", paste0("lag_temperatureMax_", "06") , 
+                   paste0("lag_Stages_","06"), "(1|fips)", "(1|Days)",sep = "+") ), 
+                        data = Analysis)
+  
+FnlMdlInt = lme4::lmer(as.formula(paste("NewCases ~ Lag_NewCases ", 
+                            paste0("lag_temperatureMax_", "06", "*", 
+                                   paste0("lag_precipIntensity_", "06")) , 
+                   paste0("lag_Stages_","06"), "(1|fips)", "(1|Days)",sep = "+") ) ,
+                   data = Analysis)
+
+FnlMdlIntSqr = lme4::lmer(as.formula(paste("NewCases ~ Lag_NewCases ", 
+                            paste0("lag_temperatureMax_", "06", "*", 
+                                   paste0("lag_precipIntensity_", "06")) , 
+                            "lag_temp_sqr",
+                   paste0("lag_Stages_","06"), "(1|fips)", "(1|Days)",sep = "+") ) ,
+                   data = Analysis)
+
+
+LRTest = lmtest::lrtest(FnlMdlNoInt, FnlMdlInt)$`Pr(>Chisq)` %>% 
+  as_tibble() %>% 
+  filter(!is.na(value) )
+
+LRTestSqr = lmtest::lrtest(FnlMdlIntSqr, FnlMdlNoInt)$`Pr(>Chisq)` %>% 
+  as_tibble() %>% 
+  filter(!is.na(value) )
+
+CheckResiduals = broom::augment(FnlMdlInt) %>% 
+  ggplot(., aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  theme_classic()
+
+Coefs = broom::tidy(FnlMdlIntSqr) %>% 
+  filter(group == "fixed")
+
+```
+
+The best model is the model with an interaction, and the second order polynomial. We use a likelihood ratio test, as all three models are nested. 
+
+Finally, in order to check that the model meets the basic assumption of __, we visually check the residuals versus the fitted values. As we can see, there seems to be no correlation. 
+
+```{r ResidCheck}
+
+CheckResiduals
+
+```
+
+After deciding on the model, we use a Bayesian work flow. Unfortunately, there is not enough computing power to check all of the lags.  
+
+The next step is model a prior. Ideally, one can use institutional knowledge to determine the prior. For this modeling exercise, we will use the function `get_prior` from the `brms` package to determine the prior. As a comparison, we also use a weak prior. All of the parameters have been transformed to have a mean of zero, and a standard deviation of one. 
+
+```{r BayesianMdl , eval = FALSE}
+
+CovidBayesianStd <-
+  brm(data = Analysis, family = gaussian,
+      NewCases ~ Lag_NewCases + lag_temperatureMax_06 * lag_precipIntensity_06 + lag_temp_sqr  + 
+        lag_Stages_06 +
+        (1 | fips) + (1|Days),
+      prior = c(prior(student_t(3, 3, 4.4), class = Intercept),
+                prior(student_t(3, 0, 4.4) , class = sd) ),
+      iter = 10000, warmup = 4000, chains = 4, cores = 4,
+      seed = 12)
+
+CovidBayesian10 <-
+  brm(data = Analysis, family = gaussian,
+      NewCases ~ Lag_NewCases + lag_temperatureMax_06 * lag_precipIntensity_06 + lag_temp_sqr  + 
+        lag_Stages_06 +
+        (1 | fips) + (1|Days),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(cauchy(0, 1), class = sd)),
+      iter = 10000, warmup = 4000, chains = 4, cores = 4,
+      seed = 12)
+
+CovidBayesian10Census <-
+  brm(data = Analysis, family = gaussian,
+      NewCases ~ Lag_NewCases + lag_temperatureMax_06 * lag_precipIntensity_06 + lag_temp_sqr  + 
+        lag_Stages_06 + MedianAge + MedianIncome +
+        (1 | fips) + (1|Days),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(cauchy(0, 1), class = sd)),
+      iter = 10000, warmup = 4000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.9),
+      seed = 12)
+
+CovidBayesianStdCensus <-
+  brm(data = Analysis, family = gaussian,
+      NewCases ~ Lag_NewCases + lag_temperatureMax_06 * lag_precipIntensity_06 + lag_temp_sqr  + 
+        lag_Stages_06 + MedianAge + MedianIncome +
+        (1 | fips) + (1|Days),
+      prior = c(prior(student_t(3, 3, 4.4), class = Intercept),
+                prior(student_t(3, 0, 4.4) , class = sd)),
+      iter = 10000, warmup = 4000, chains = 4, cores = 4,
+      control = list(adapt_delta = 0.9),
+      seed = 12)
+
+
+
+CovidBayesianStd <- add_criterion(CovidBayesianStd, "waic")
+CovidBayesian10 <- add_criterion(CovidBayesian10, "waic")
+
+CovidBayesianStdCensus <- add_criterion(CovidBayesianStdCensus, "waic")
+CovidBayesian10Census <- add_criterion(CovidBayesian10Census, "waic")
+
+
+mdlWeights = brms::model_weights(CovidBayesianStd,CovidBayesian10, CovidBayesianStdCensus,
+                                 CovidBayesian10Census , weights = "waic")
+
+LOOComp_a = loo_compare(CovidBayesianStd,CovidBayesian10, CovidBayesianStdCensus,
+                                CovidBayesian10Census , criterion = "waic") 
+
+EvaluateDf = LOOComp_a %>% 
+  as_tibble() %>% 
+  mutate(Models = rownames(LOOComp_a) ) %>% 
+  select(Models, elpd_diff, se_diff) %>% 
+  inner_join(tibble( Models = names(mdlWeights),
+                     ModelWeights = mdlWeights), 
+             by = "Models")
+
+```
+
+
+We use the `brms` function `model_weights`. The `model_weights` provides a weighting system which judges the predictive accuracy of the posterior distribution. For a more extensive discussion, see [here](https://discourse.mc-stan.org/t/model-stacking-and-loo-brms-models/4611). 
+
+The model weights are based on the Widely Applicable Information Criterion (WAIC). For a very good explanation and detailed breakdown, see: [here](https://bookdown.org/ajkurz/Statistical_Rethinking_recoded/overfitting-regularization-and-information-criteria.html#using-information-criteria). 
+
+The below table shows the results. 
+
+
+```{r sv, eval = FALSE}
+
+dput(EvaluateDf, "Data/ModelEvaluate")
+
+
+```
+
+```{r looCmp}
+
+dget( "Data/ModelEvaluate") %>% 
+  mutate_if(is.numeric, ~round(., digits = 3) ) %>% 
+  gt() %>% 
+   tab_header(
+    title = "Model Evaluation"
+    )
+
+
+```
+
+As we can see there is not a considerable difference between the models. The `elpd` difference is smaller, or a similar size to the standard error. The model weights show that the `CovidBayesianStdCensus` model is the best model, but there is not a considerable difference between any of the four models. There is little difference between a weak, normally distributed prior, and Student's T prior. There is also little difference between the addition of the census variables, and the model that does not have the census variables. 
+
+## Checking the models: 
+
+Before looking at the credible intervals, and the mean estimate from the posterior distribution of our two temperature variables, we need to check the chains.
+
+As we can see the chains follow the caterpillar like shapes. 
+
+The posterior distribution for our parameters also look good. 
+
+
+## Effect of Temperature and Precipitation Intensity
+
+The best model combination was the interaction model, where we modeled an interaction between the max temperature on a given day, and the precipitation intensity. In Statistical Rethinking, Richard McElreath notes that plotting interactions is a much more intuitive method to understand the effect. 
+
+```{r ParamPlts , eval = FALSE}
+
+
+
+GetCondEffects = function(x) {
+  
+  CondEffects = conditional_effects(get(x), "lag_temperatureMax_06:lag_precipIntensity_06")
+  CondEffectsDF = CondEffects$`lag_temperatureMax_06:lag_precipIntensity_06` %>% 
+    select(lag_temperatureMax_06 , lag_precipIntensity_06, estimate__, 
+         lower__,  upper__) %>% 
+    mutate(Model = x)
+}
+
+ConditionalEffects = purrr::map( as.list(names(mdlWeights)), GetCondEffects) %>% 
+  bind_rows(.)
+
+dput(ConditionalEffects, "Data/ConditionalEffects" )
+
+
+GetPosterior = function(x) {
+
+  posteffects <- posterior_samples(get(x), add_chain = T) %>% 
+    select(b_Intercept , b_Lag_NewCases, b_lag_temperatureMax_06, 
+           b_lag_precipIntensity_06, b_lag_temp_sqr,
+           b_lag_Stages_06Stage1, b_lag_Stages_06Stage2, b_lag_Stages_06Stage3,
+           `b_lag_temperatureMax_06:lag_precipIntensity_06`,
+           sd_Days__Intercept,sd_fips__Intercept,sigma, chain) %>% 
+    mutate(Model = x)
+}
+
+
+PosterionDistr = purrr::map( as.list(names(mdlWeights)), GetPosterior) %>% 
+  bind_rows(.)
+
+dput(PosterionDistr, "Data/PosteriorDistr" )
+
+
+```
+
+```{r margeffects}
+
+CovidME = dget("Data/ConditionalEffects") %>% 
+  select(lag_temperatureMax_06 , lag_precipIntensity_06, estimate__, 
+         lower__,  upper__, Model) %>% 
+  filter(estimate__ >=0) %>% 
+  ggplot(., aes(x = lag_temperatureMax_06, y = estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin=lower__ , ymax=upper__), alpha=0.2) +
+  theme_classic() +
+  facet_wrap(~ lag_precipIntensity_06 + Model, ncol = 5) +
+  labs(y = "Estimated New Cases", x= "Lagged Max Temperature")
+
+CovidME
+
+
+```
+
+
+```{r PosteriorParaDistr}
+
+
+CheckMainParams = dget("Data/PosteriorDistr") %>% 
+  select(b_lag_temperatureMax_06,  Model) %>% 
+  group_by(Model) %>% 
+  mutate(rown = row_number() ) %>% 
+  ungroup() %>% 
+  tidyr::spread(Model, b_lag_temperatureMax_06)
+
+CheckMainParams = dget("Data/PosteriorDistr") %>% 
+  select(b_lag_temperatureMax_06, b_lag_temp_sqr,  `b_lag_temperatureMax_06:lag_precipIntensity_06`,
+         b_lag_precipIntensity_06 , Model) %>% 
+  tidyr::gather(Var, Value, -Model) %>% 
+  ggplot(., aes(x = Value, color = Model)) +
+  geom_density() +
+  theme_classic() +
+  facet_wrap(~Var) +
+  theme(legend.position = "bottom") +
+  labs(x = "Posterior Parameter Distribution", colour = "")
+  
+CheckMainParams
+
+```
+
+
+```{r traces}
+
+library(bayesplot)
+
+
+ModelListNms = as.list( 
+  c("CovidBayesianStd","CovidBayesian10","CovidBayesianStdCensus", "CovidBayesian10Census") )
+
+  CreateAllTracePlts = function(x) {
+
+  TraceOut = mcmc_trace(dget("Data/PosteriorDistr") %>% 
+                          filter(Model == x) %>% select(-Model) ,
+             facet_args = list(ncol = 3), 
+             size = .15) +
+    labs(title = paste0("Trace Plots for Model: ", x)) +
+    theme_classic() +
+    theme(legend.position = c(.95, .2))
+
+}
+
+AllTracePlts = purrr::map(ModelListNms,CreateAllTracePlts ) 
+
+```
+
+The trace are below:
+
+```{r trace1}
+
+AllTracePlts[[1]]
+
+
+```
+
+
+```{r trace2}
+
+AllTracePlts[[2]]
+
+
+```
+
+
+```{r trace3}
+
+AllTracePlts[[3]]
+
+
+```
+
+
+```{r trace4}
+
+AllTracePlts[[4]]
+
+
+```
+

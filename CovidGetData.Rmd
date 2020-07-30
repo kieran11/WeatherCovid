@@ -1,0 +1,381 @@
+---
+title: "Getting Covid and Weather Data"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Weather Data
+
+Many epidemiological experts have linked weather to rising or falling Covid-19 cases. The first two steps of the process of getting data is as follows: 
+
+1.  The Covid-19 cases by county in the United States (US) can be found [here:](https://kjhealy.github.io/covdata/). 
+
+2.  The weather data comes from Darksky. We use the package `darksky`. `darksky` is a wrapper for the API DarkSky provides. 
+
+The package `darksky` and its documentation is [here:](https://github.com/hrbrmstr/darksky). Importantly, the API will shutdown at the end of 2021. 
+
+In order to get the weather for each county for a given day, we need the longitude and latitude for each of the counties. The dataset with every longitude and latitude in a given county is provided by the Open Data initiative of the U.S. Government. The complete raw dataset can be downloaded [here:](https://data.healthcare.gov/dataset/Geocodes-USA-with-Counties/52wv-g36k). To get a longitude and latitude for each county, we just take the means by county. It is not a perfect estimation for weather, but depending on the geographical size of the county, it should work well. 
+ 
+
+```{r WeatherCovid, eval = FALSE, echo = TRUE}
+
+library(covdata)
+library(tidyverse)
+library(darksky)
+library(ggmap)
+## Darksky API: 
+DS = "Weather API"
+darksky_api_key(DS)
+## google maps API: 
+GoogleAPI = "API Key"
+register_google(key = GoogleAPI)
+
+longlat = readr::read_csv("C:/Users/Kieran Shah/Downloads/Geocodes_USA_with_Counties.csv") %>% 
+  filter(!is.na(county)) %>% 
+  group_by(county, state) %>% 
+  summarise(long = mean(longitude ),
+            lat = mean(latitude)) %>% 
+  ungroup()
+
+st_crosswalk <- tibble(state = state.name) %>%
+  bind_cols(tibble(abb = state.abb)) %>% 
+  bind_rows(tibble(state = "District of Columbia", abb = "DC"))
+
+IndlCounties = nytcovcounty %>% 
+  distinct(county, state) %>% 
+  inner_join(st_crosswalk, by = "state") %>% 
+  inner_join(longlat, by = c("county" = "county", "abb" = "state")) %>% 
+  inner_join(nytcovcounty , by = c("county", "state")) %>%
+  filter(lubridate::month(date) %in% c(3,4,5,6) ) %>% 
+  mutate(timeStamp = paste0(date, "T13:00:00")) %>%  
+  mutate(TempData = purrr::pmap(list(lat, long, timeStamp), get_forecast_for, 
+                                header = TRUE, 
+                                exclude = "currently,minutely,hourly,alerts,flags"))
+
+IndlCountiesUnnest = IndlCounties %>%
+  mutate(Data2Weather = purrr::map(TempData, ~ .x$daily %>% 
+                                     select(temperatureMax , temperatureLow, 
+                                                            precipProbability , precipIntensity))) %>% 
+  tidyr::unnest(c(Data2Weather))
+
+```
+
+## Other predictors: 
+
+There are many factors which are associated with rising, or declining Covid-19 cases. This post cannot get all of the predictors. Furthermore, all the relevant predictors are probably unknown at this time. 
+
+To get other predictors, we use the package `tidycensus`. After registering for an API key, you can check all the variables in the American Community Survey (ACS) with the `load_variables` function. 
+
+I pulled median age and median income for this analysis. 
+
+The weather data, Covid-19 data, and ACS data are then combined together. 
+
+```{r ExtraCovariates, eval= FALSE, echo = TRUE}
+
+library(dplyr)
+
+tidycensus::census_api_key("API Key")
+v17 <- tidycensus::load_variables(2017, "acs5", cache = TRUE)
+
+MedianAgeCounty <- tidycensus::get_acs(geography = "county",
+                                       variables = c(MedianAge = "B01002_001"),
+                                       #state = "VT",
+                                       year = 2017)
+
+Poverty = tidycensus::get_acs(geography = "county",
+                              variables = c(MedianIncome = "B17020_001"),
+                              #state = "VT",
+                              year = 2017)
+
+ExtaVariables = inner_join(Poverty %>% 
+                             select(MedianIncome = estimate, GEOID), 
+                           MedianAgeCounty %>% 
+                             select(GEOID, NAME, MedianAge = estimate ), by = "GEOID")
+
+```
+
+
+
+## Focus on California
+
+While using the entire U.S. dataset provides the greatest amount of variation, there are 50 state governments provided different policies. In order to isolate government policy without researching every 50 state policies, we can focus on California. California has both a lot of variation in temperatures and cases by county, it provides an interesting case study.
+
+California has opened up to Stage 3 as of July 22. 
+
+1.  California closed for shelter-at-home on March 19, 2020. 
+2.  California opened for stage 2 on May 8, 2020. 
+3.  California opened for stage 3 on June June 12, 2020.
+
+An important caveat is that some of the openings are based on meeting county thresholds. 
+
+```{r ReadInPckg }
+
+library(dplyr)
+library(tidyr)
+library(rlang)
+library(ggplot2)
+library(gt)
+
+WeatherCovid = dget("Data/WeatherCasesCA")
+
+
+```
+
+The first step is to create multiple lags for weather. Covid-19 cases will show up after temperature changes. To do so, we follow [this](https://purrple.cat/blog/2018/03/02/multiple-lags-with-tidy-evaluation/) blog post. 
+
+```{r CreateLags , echo = TRUE}
+
+lags <- function(var, n=10){
+  var <- enquo(var)
+  
+  indices <- seq_len(n)
+  purrr::map( indices, ~quo(lag(!!var, !!.x)) ) %>% 
+    purrr::set_names(sprintf("lag_%s_%02d", quo_text(var), indices))
+  
+}
+
+```
+
+
+```{r tempPltsCreate , cashe = TRUE}
+
+WeatherDF = WeatherCovid %>%
+  group_by(fips) %>% 
+  mutate(!!!lags(temperatureMax, 14),
+         !!!lags(precipIntensity, 14),
+         !!!lags(precipProbability, 14)) %>% 
+  ungroup() 
+
+PlotFunc = function(x, y) {
+  
+WeatherDFTemp = WeatherDF %>%  
+  select(fips, timeStamp, contains(x)) %>% 
+  tidyr::pivot_longer(cols = c(-fips, -timeStamp) ,
+                      names_to = "lag_weather",
+                      values_to = "value_lag_weather") 
+
+PltTbl = WeatherDF %>%  
+  select(fips, timeStamp, cases) %>% 
+  inner_join(WeatherDFTemp , by = c("fips", "timeStamp")) %>% 
+  mutate(TempDaySince = stringi::stri_replace_all_regex(lag_weather, "[^[:digit:]]", "") %>% 
+           as.numeric(.),
+         TempDaySince = ifelse(is.na(TempDaySince), 0, TempDaySince) ) %>% 
+  filter(TempDaySince > 4 & !is.na(value_lag_weather)) 
+
+Plt = PltTbl %>% 
+  ggplot(. , aes(x = value_lag_weather , y = cases)) +
+  geom_point() +
+  theme_classic() +
+  facet_wrap(~TempDaySince, scale = "fixed") +
+  labs(x = y)
+
+tbl = PltTbl %>% 
+  mutate(weather = ggplot2::cut_number(value_lag_weather, 5)) %>% 
+  group_by(weather , TempDaySince) %>% 
+  summarise(MedianCases = median(cases, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  tidyr::spread(weather, MedianCases, fill = 0) 
+
+return(list(Plt = Plt,
+            tbl = tbl))
+}
+
+
+TemperaturePlot = PlotFunc("temperatureMax", "Weather Fahrenheit")
+PrecipIntensityPlot = PlotFunc("precipIntensity", "Precipitations Plot")
+PrecipProbPlot = PlotFunc("precipProbability", "Probability Precipitations Plot")
+
+```
+
+## Basic Correlations:
+
+Next, we take a look at the data. How do the scatter plots look comparing Covid-19 cases and the four different weather variables. 
+
+
+1.  Max Temperature: 
+
+```{r pltTemp}
+
+TemperaturePlot$Plt
+
+
+```
+
+The below table shows the distribution by range of max temperature. The rows are the number of days in lags. The columns are the temperature ranges. 
+
+```{r tableTemp}
+
+tempCols = names(TemperaturePlot$tbl)[-1]
+
+TemperaturePlot$tbl %>% 
+  gt() %>% 
+  tab_spanner(label = "Range",
+              columns = tempCols)
+
+
+```
+
+Both the plots and the table above show that the lag and the higher temperatures seem to be correlated with higher cases. The greater the lag the more cases, and the greater the temperature, the greater the new cases. 
+
+2.  Precipitation Probability: 
+
+```{r pltprecipprob}
+
+PrecipProbPlot$Plt
+
+
+```
+
+The below table shows the distribution by range of max temperature.
+
+```{r tableprecipprob}
+
+tempColsPrecipProb = names(PrecipProbPlot$tbl)[-1]
+
+PrecipProbPlot$tbl %>% 
+  gt() %>% 
+  tab_spanner(label = "Range",
+              columns = tempColsPrecipProb)
+
+
+```
+
+
+3.  Precipitation Intensity: 
+
+```{r pltprecipint}
+
+PrecipIntensityPlot$Plt
+
+
+```
+
+The below table shows the distribution by range of max temperature.
+
+```{r tableprecipint}
+
+tempColsPrecipInt = names(PrecipIntensityPlot$tbl)[-1]
+
+PrecipIntensityPlot$tbl %>% 
+  gt() %>% 
+  tab_spanner(label = "Range",
+              columns = tempColsPrecipInt)
+
+
+```
+
+Both the precipitation probability, and the precipitation intensity show a similar pattern. Greater amounts of rain are associated with fewer cases, and the greater the lag of precipation probability of intensity, the greater the number of cases. 
+
+
+## Cases and Stage Openings: 
+
+
+```{r casesStages}
+
+CasesWeather = WeatherDF %>%
+  mutate(Stages = case_when(date < lubridate::ymd("20200319") ~ "Pre-Shelter",
+                            date >= lubridate::ymd("20200319") &
+                              date < lubridate::ymd("20200509")~ "Stage 1" ,
+                            date >= lubridate::ymd("20200509") &
+                              date < lubridate::ymd("20200611") ~ "Stage 2",
+                            TRUE ~ "Stage 3")) %>% 
+  group_by(fips) %>% 
+  mutate( !!!lags(Stages, 14)) %>% 
+  ungroup()
+
+dput(CasesWeather, "Data/AnalysisDataSet")
+
+Times = CasesWeather %>%
+  count(Stages, date) %>% 
+  group_by(Stages) %>% 
+  filter(row_number() == 1 | row_number() == n()) %>%
+  mutate(Tm = case_when(row_number() == 1 ~ "Start", TRUE ~ "End")) %>% 
+  ungroup() %>% 
+  select(-n) %>% 
+  tidyr::spread(Tm, date)
+  
+Times1Week = CasesWeather %>%
+  count(lag_Stages_07, date) %>% 
+  group_by(lag_Stages_07) %>% 
+  filter(row_number() == 1 | row_number() == n()) %>%
+  mutate(Tm = case_when(row_number() == 1 ~ "Start", TRUE ~ "End")) %>% 
+  ungroup() %>% 
+  select(-n) %>% 
+  tidyr::spread(Tm, date) %>% 
+  filter(!is.na(lag_Stages_07))
+
+Times2Week = CasesWeather %>%
+  count(lag_Stages_12, date) %>% 
+  group_by(lag_Stages_12) %>% 
+  filter(row_number() == 1 | row_number() == n()) %>%
+  mutate(Tm = case_when(row_number() == 1 ~ "Start", TRUE ~ "End")) %>% 
+  ungroup() %>% 
+  select(-n) %>% 
+  tidyr::spread(Tm, date) %>% 
+  filter(!is.na(lag_Stages_12))
+
+
+CasesStagesTbl = CasesWeather %>% 
+  group_by( fips) %>% 
+  mutate(PrevDayCases = lag(cases),
+         PrevDayCases =ifelse(is.na(PrevDayCases), 0, PrevDayCases ) ) %>% 
+  ungroup() %>% 
+  mutate(NewCases = cases - PrevDayCases) %>% 
+  group_by(date, Stages) %>% 
+  summarise(NewCases = sum(NewCases)) %>% 
+  ungroup() 
+
+
+StagePlts = function(x, y) {
+  
+  StageLen = rlang::sym(y)
+  
+CasesStagesPlt = CasesStagesTbl %>% 
+  ggplot(., aes(x = date, y = NewCases )) +
+  geom_line() +
+  theme_classic() +
+  geom_rect(data=x, 
+            inherit.aes=FALSE, 
+            aes(xmin=Start, xmax=End, 
+                ymin=min(0),
+                ymax=max(CasesStagesTbl$NewCases), 
+                group=!!StageLen), color="transparent", fill=c("red", "blue", "green", "yellow"), 
+            alpha=0.3)
+}
+
+
+CaseStagesPlt = StagePlts(Times, "Stages")
+CaseStages1WeekPlt = StagePlts(Times1Week, "lag_Stages_07")
+CaseStages2WeekPlt = StagePlts(Times2Week, "lag_Stages_12")
+
+
+```
+
+The plot below shows the change in new cases over time. The background colours show the period of each stage. For the pre-lockdown, the background is red. 
+
+```{r CasesStagePlt}
+
+CaseStagesPlt
+
+```
+
+The next plot shows the same idea, but instead of showing the stages, it shows the seven day lag since the new stage of lockdown was imposed. 
+
+```{r CasesStagePlt1}
+
+CaseStages1WeekPlt
+
+```
+
+Finally, the plot below shows the twelve day lag since the last stage of lockdown occurred. It is important to note that we do not have enough data to do the 14 day lag. 
+
+```{r CasesStagePlt2}
+
+CaseStages2WeekPlt
+
+```
+
+Overall, it looks like the one week plot is the most predictive, but this is simply just a visually inspection. 

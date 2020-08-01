@@ -8,7 +8,10 @@ weather metrics on **new** Covid-19 cases in California. The complete
 and large dataset can be found
 [here](https://www.dropbox.com/preview/Public/WeatherData/WeatherCases.csv?role=personal).
 
-The basic California model will hypothesize that the Stages of each
+The complete code for this post can be found
+[here:](https://github.com/kieran11/WeatherCovid/blob/master/CovidAnalysis.Rmd).
+
+The basic California model will hypothesize that the stages of each
 opening should increase new cases after a week. Similarly, weather
 should work in a similar pattern. Better weather should encourage more
 outdoor activity, and we should see a drop in cases up until a certain
@@ -23,7 +26,9 @@ not nested, and thus we do not use a log likelihood test. A nested
 models contains the previous model within it.
 
 As we can see, the model with a six day lag has the lowest AIC, and it
-will be the model we evaluate.
+will be the model we evaluate. The `Mdl` column just tells us whether it
+is an interaction model or not. The interaction model has an interaction
+between temperature and precipiation intensity.
 
 <!--html_preserve-->
 
@@ -31,7 +36,7 @@ will be the model we evaluate.
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
-#vhbmshmcfv .gt_table {
+#ivjqmuocpv .gt_table {
   display: table;
   border-collapse: collapse;
   margin-left: auto;
@@ -54,7 +59,7 @@ will be the model we evaluate.
   border-left-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_heading {
+#ivjqmuocpv .gt_heading {
   background-color: #FFFFFF;
   text-align: center;
   border-bottom-color: #FFFFFF;
@@ -66,7 +71,7 @@ will be the model we evaluate.
   border-right-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_title {
+#ivjqmuocpv .gt_title {
   color: #333333;
   font-size: 125%;
   font-weight: initial;
@@ -76,7 +81,7 @@ will be the model we evaluate.
   border-bottom-width: 0;
 }
 
-#vhbmshmcfv .gt_subtitle {
+#ivjqmuocpv .gt_subtitle {
   color: #333333;
   font-size: 85%;
   font-weight: initial;
@@ -86,13 +91,13 @@ will be the model we evaluate.
   border-top-width: 0;
 }
 
-#vhbmshmcfv .gt_bottom_border {
+#ivjqmuocpv .gt_bottom_border {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_col_headings {
+#ivjqmuocpv .gt_col_headings {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -107,7 +112,7 @@ will be the model we evaluate.
   border-right-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_col_heading {
+#ivjqmuocpv .gt_col_heading {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -127,7 +132,7 @@ will be the model we evaluate.
   overflow-x: hidden;
 }
 
-#vhbmshmcfv .gt_column_spanner_outer {
+#ivjqmuocpv .gt_column_spanner_outer {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -139,15 +144,15 @@ will be the model we evaluate.
   padding-right: 4px;
 }
 
-#vhbmshmcfv .gt_column_spanner_outer:first-child {
+#ivjqmuocpv .gt_column_spanner_outer:first-child {
   padding-left: 0;
 }
 
-#vhbmshmcfv .gt_column_spanner_outer:last-child {
+#ivjqmuocpv .gt_column_spanner_outer:last-child {
   padding-right: 0;
 }
 
-#vhbmshmcfv .gt_column_spanner {
+#ivjqmuocpv .gt_column_spanner {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
@@ -159,7 +164,7 @@ will be the model we evaluate.
   width: 100%;
 }
 
-#vhbmshmcfv .gt_group_heading {
+#ivjqmuocpv .gt_group_heading {
   padding: 8px;
   color: #333333;
   background-color: #FFFFFF;
@@ -181,7 +186,7 @@ will be the model we evaluate.
   vertical-align: middle;
 }
 
-#vhbmshmcfv .gt_empty_group_heading {
+#ivjqmuocpv .gt_empty_group_heading {
   padding: 0.5px;
   color: #333333;
   background-color: #FFFFFF;
@@ -196,19 +201,19 @@ will be the model we evaluate.
   vertical-align: middle;
 }
 
-#vhbmshmcfv .gt_striped {
+#ivjqmuocpv .gt_striped {
   background-color: rgba(128, 128, 128, 0.05);
 }
 
-#vhbmshmcfv .gt_from_md > :first-child {
+#ivjqmuocpv .gt_from_md > :first-child {
   margin-top: 0;
 }
 
-#vhbmshmcfv .gt_from_md > :last-child {
+#ivjqmuocpv .gt_from_md > :last-child {
   margin-bottom: 0;
 }
 
-#vhbmshmcfv .gt_row {
+#ivjqmuocpv .gt_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -227,7 +232,7 @@ will be the model we evaluate.
   overflow-x: hidden;
 }
 
-#vhbmshmcfv .gt_stub {
+#ivjqmuocpv .gt_stub {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -239,7 +244,7 @@ will be the model we evaluate.
   padding-left: 12px;
 }
 
-#vhbmshmcfv .gt_summary_row {
+#ivjqmuocpv .gt_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -249,7 +254,7 @@ will be the model we evaluate.
   padding-right: 5px;
 }
 
-#vhbmshmcfv .gt_first_summary_row {
+#ivjqmuocpv .gt_first_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -259,7 +264,7 @@ will be the model we evaluate.
   border-top-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_grand_summary_row {
+#ivjqmuocpv .gt_grand_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -269,7 +274,7 @@ will be the model we evaluate.
   padding-right: 5px;
 }
 
-#vhbmshmcfv .gt_first_grand_summary_row {
+#ivjqmuocpv .gt_first_grand_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -279,7 +284,7 @@ will be the model we evaluate.
   border-top-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_table_body {
+#ivjqmuocpv .gt_table_body {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -288,7 +293,7 @@ will be the model we evaluate.
   border-bottom-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_footnotes {
+#ivjqmuocpv .gt_footnotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -302,13 +307,13 @@ will be the model we evaluate.
   border-right-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_footnote {
+#ivjqmuocpv .gt_footnote {
   margin: 0px;
   font-size: 90%;
   padding: 4px;
 }
 
-#vhbmshmcfv .gt_sourcenotes {
+#ivjqmuocpv .gt_sourcenotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -322,47 +327,47 @@ will be the model we evaluate.
   border-right-color: #D3D3D3;
 }
 
-#vhbmshmcfv .gt_sourcenote {
+#ivjqmuocpv .gt_sourcenote {
   font-size: 90%;
   padding: 4px;
 }
 
-#vhbmshmcfv .gt_left {
+#ivjqmuocpv .gt_left {
   text-align: left;
 }
 
-#vhbmshmcfv .gt_center {
+#ivjqmuocpv .gt_center {
   text-align: center;
 }
 
-#vhbmshmcfv .gt_right {
+#ivjqmuocpv .gt_right {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#vhbmshmcfv .gt_font_normal {
+#ivjqmuocpv .gt_font_normal {
   font-weight: normal;
 }
 
-#vhbmshmcfv .gt_font_bold {
+#ivjqmuocpv .gt_font_bold {
   font-weight: bold;
 }
 
-#vhbmshmcfv .gt_font_italic {
+#ivjqmuocpv .gt_font_italic {
   font-style: italic;
 }
 
-#vhbmshmcfv .gt_super {
+#ivjqmuocpv .gt_super {
   font-size: 65%;
 }
 
-#vhbmshmcfv .gt_footnote_marks {
+#ivjqmuocpv .gt_footnote_marks {
   font-style: italic;
   font-size: 65%;
 }
 </style>
 
-<div id="vhbmshmcfv" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<div id="ivjqmuocpv" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
 
 <table class="gt_table">
 
@@ -542,14 +547,9 @@ The best model is the model with an interaction, and the second order
 polynomial. We use a likelihood ratio test, as all three models are
 nested.
 
-Finally, in order to check that the model meets the basic assumption of
-\_\_, we visually check the residuals versus the fitted values. As we
-can see, there seems to be no correlation.
-
-![](CovidAnalysis_files/figure-gfm/ResidCheck-1.png)<!-- -->
-
 After deciding on the model, we use a Bayesian work flow. Unfortunately,
-there is not enough computing power to check all of the lags.
+there is not enough computing power to check all of the lags, which is
+why we previously used a Frequentist work flow.
 
 The next step is model a prior. Ideally, one can use institutional
 knowledge to determine the prior. For this modeling exercise, we will
@@ -576,7 +576,7 @@ The below table shows the results.
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
-#ljyajfytcl .gt_table {
+#pnejhdkulp .gt_table {
   display: table;
   border-collapse: collapse;
   margin-left: auto;
@@ -599,7 +599,7 @@ The below table shows the results.
   border-left-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_heading {
+#pnejhdkulp .gt_heading {
   background-color: #FFFFFF;
   text-align: center;
   border-bottom-color: #FFFFFF;
@@ -611,7 +611,7 @@ The below table shows the results.
   border-right-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_title {
+#pnejhdkulp .gt_title {
   color: #333333;
   font-size: 125%;
   font-weight: initial;
@@ -621,7 +621,7 @@ The below table shows the results.
   border-bottom-width: 0;
 }
 
-#ljyajfytcl .gt_subtitle {
+#pnejhdkulp .gt_subtitle {
   color: #333333;
   font-size: 85%;
   font-weight: initial;
@@ -631,13 +631,13 @@ The below table shows the results.
   border-top-width: 0;
 }
 
-#ljyajfytcl .gt_bottom_border {
+#pnejhdkulp .gt_bottom_border {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_col_headings {
+#pnejhdkulp .gt_col_headings {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -652,7 +652,7 @@ The below table shows the results.
   border-right-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_col_heading {
+#pnejhdkulp .gt_col_heading {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -672,7 +672,7 @@ The below table shows the results.
   overflow-x: hidden;
 }
 
-#ljyajfytcl .gt_column_spanner_outer {
+#pnejhdkulp .gt_column_spanner_outer {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -684,15 +684,15 @@ The below table shows the results.
   padding-right: 4px;
 }
 
-#ljyajfytcl .gt_column_spanner_outer:first-child {
+#pnejhdkulp .gt_column_spanner_outer:first-child {
   padding-left: 0;
 }
 
-#ljyajfytcl .gt_column_spanner_outer:last-child {
+#pnejhdkulp .gt_column_spanner_outer:last-child {
   padding-right: 0;
 }
 
-#ljyajfytcl .gt_column_spanner {
+#pnejhdkulp .gt_column_spanner {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
@@ -704,7 +704,7 @@ The below table shows the results.
   width: 100%;
 }
 
-#ljyajfytcl .gt_group_heading {
+#pnejhdkulp .gt_group_heading {
   padding: 8px;
   color: #333333;
   background-color: #FFFFFF;
@@ -726,7 +726,7 @@ The below table shows the results.
   vertical-align: middle;
 }
 
-#ljyajfytcl .gt_empty_group_heading {
+#pnejhdkulp .gt_empty_group_heading {
   padding: 0.5px;
   color: #333333;
   background-color: #FFFFFF;
@@ -741,19 +741,19 @@ The below table shows the results.
   vertical-align: middle;
 }
 
-#ljyajfytcl .gt_striped {
+#pnejhdkulp .gt_striped {
   background-color: rgba(128, 128, 128, 0.05);
 }
 
-#ljyajfytcl .gt_from_md > :first-child {
+#pnejhdkulp .gt_from_md > :first-child {
   margin-top: 0;
 }
 
-#ljyajfytcl .gt_from_md > :last-child {
+#pnejhdkulp .gt_from_md > :last-child {
   margin-bottom: 0;
 }
 
-#ljyajfytcl .gt_row {
+#pnejhdkulp .gt_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -772,7 +772,7 @@ The below table shows the results.
   overflow-x: hidden;
 }
 
-#ljyajfytcl .gt_stub {
+#pnejhdkulp .gt_stub {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -784,7 +784,7 @@ The below table shows the results.
   padding-left: 12px;
 }
 
-#ljyajfytcl .gt_summary_row {
+#pnejhdkulp .gt_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -794,7 +794,7 @@ The below table shows the results.
   padding-right: 5px;
 }
 
-#ljyajfytcl .gt_first_summary_row {
+#pnejhdkulp .gt_first_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -804,7 +804,7 @@ The below table shows the results.
   border-top-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_grand_summary_row {
+#pnejhdkulp .gt_grand_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -814,7 +814,7 @@ The below table shows the results.
   padding-right: 5px;
 }
 
-#ljyajfytcl .gt_first_grand_summary_row {
+#pnejhdkulp .gt_first_grand_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -824,7 +824,7 @@ The below table shows the results.
   border-top-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_table_body {
+#pnejhdkulp .gt_table_body {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -833,7 +833,7 @@ The below table shows the results.
   border-bottom-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_footnotes {
+#pnejhdkulp .gt_footnotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -847,13 +847,13 @@ The below table shows the results.
   border-right-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_footnote {
+#pnejhdkulp .gt_footnote {
   margin: 0px;
   font-size: 90%;
   padding: 4px;
 }
 
-#ljyajfytcl .gt_sourcenotes {
+#pnejhdkulp .gt_sourcenotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -867,47 +867,47 @@ The below table shows the results.
   border-right-color: #D3D3D3;
 }
 
-#ljyajfytcl .gt_sourcenote {
+#pnejhdkulp .gt_sourcenote {
   font-size: 90%;
   padding: 4px;
 }
 
-#ljyajfytcl .gt_left {
+#pnejhdkulp .gt_left {
   text-align: left;
 }
 
-#ljyajfytcl .gt_center {
+#pnejhdkulp .gt_center {
   text-align: center;
 }
 
-#ljyajfytcl .gt_right {
+#pnejhdkulp .gt_right {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#ljyajfytcl .gt_font_normal {
+#pnejhdkulp .gt_font_normal {
   font-weight: normal;
 }
 
-#ljyajfytcl .gt_font_bold {
+#pnejhdkulp .gt_font_bold {
   font-weight: bold;
 }
 
-#ljyajfytcl .gt_font_italic {
+#pnejhdkulp .gt_font_italic {
   font-style: italic;
 }
 
-#ljyajfytcl .gt_super {
+#pnejhdkulp .gt_super {
   font-size: 65%;
 }
 
-#ljyajfytcl .gt_footnote_marks {
+#pnejhdkulp .gt_footnote_marks {
   font-style: italic;
   font-size: 65%;
 }
 </style>
 
-<div id="ljyajfytcl" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<div id="pnejhdkulp" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
 
 <table class="gt_table">
 
@@ -1102,21 +1102,11 @@ Before looking at the credible intervals, and the mean estimate from the
 posterior distribution of our two temperature variables, we need to
 check the chains.
 
+The chains for all of the models can be found
+[here](https://github.com/kieran11/WeatherCovid/tree/master/CovidAnalysis_files/figure-gfm).
+There are four trace plots.
+
 As we can see the chains follow the caterpillar like shapes.
-
-The posterior distribution for our parameters also look good.
-
-## Effect of Temperature and Precipitation Intensity
-
-The best model combination was the interaction model, where we modeled
-an interaction between the max temperature on a given day, and the
-precipitation intensity. In Statistical Rethinking, Richard McElreath
-notes that plotting interactions is a much more intuitive method to
-understand the effect.
-
-![](CovidAnalysis_files/figure-gfm/margeffects-1.png)<!-- -->
-
-![](CovidAnalysis_files/figure-gfm/PosteriorParaDistr-1.png)<!-- -->
 
 The trace are below:
 
@@ -1127,3 +1117,50 @@ The trace are below:
 ![](CovidAnalysis_files/figure-gfm/trace3-1.png)<!-- -->
 
 ![](CovidAnalysis_files/figure-gfm/trace4-1.png)<!-- -->
+
+## Effect of Temperature and Precipitation Intensity
+
+The best model combination was the interaction model, where we modeled
+an interaction between the max temperature on a given day, and the
+precipitation intensity. In Statistical Rethinking, Richard McElreath
+notes that plotting interactions is a much more intuitive method to
+understand the effect.
+
+When we look at the posterior distribution for the weather variables, we
+see that the 95% credible intervals include zero for
+`lag_temperatureMax_06` and `lag_temp_sqr`. The other two weather
+variables are the interaction between temperature and precipitation
+intensity, and the lag of precipitation
+intensity`lag_precipIntensity_06`. The credible intervals for both of
+these variables exclude zero.
+
+All of the models can be found
+[here](https://github.com/kieran11/WeatherCovid/tree/master/CovidAnalysis_files/figure-gfm).
+
+![](CovidAnalysis_files/figure-gfm/PosteriorParaDistr-1.png)<!-- -->
+
+![](CovidAnalysis_files/figure-gfm/params-1.png)<!-- -->
+
+The best model combination was the interaction model, where we modeled
+an interaction between the max temperature on a given day, and the
+precipitation intensity. In Statistical Rethinking, Richard McElreath
+notes that plotting interactions is a much more intuitive method to
+understand the effect.
+
+![](CovidAnalysis_files/figure-gfm/margeffectsall-1.png)<!-- -->
+
+The best model combination was the interaction model, where we modeled
+an interaction between the max temperature on a given day, and the
+precipitation intensity. In Statistical Rethinking, Richard McElreath
+notes that plotting interactions is a much more intuitive method to
+understand the effect.
+
+![](CovidAnalysis_files/figure-gfm/margeffect-1.png)<!-- -->
+
+The plot above shows the interaction effect. When precipitation
+intensity is one standard deviation below mean, we see that as
+temperature increases, the estimated new cases rises. However, when
+precipitation intensity is one standard deviation above the mean, we see
+opposite. As temperature rises, estimated new cases decline. When
+precipitation intensity is at the mean, then temperature has little
+effect on estimated new cases.

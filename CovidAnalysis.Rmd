@@ -12,6 +12,9 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 The purpose of this analysis is to evaluate the impact of our three weather metrics on **new** Covid-19 cases in California. The complete and large dataset can be found [here](https://www.dropbox.com/preview/Public/WeatherData/WeatherCases.csv?role=personal).
 
+The complete code for this post can be found [here:](https://github.com/kieran11/WeatherCovid/blob/master/CovidAnalysis.Rmd). 
+
+
 ```{r analysis}
 
 library(dplyr)
@@ -56,7 +59,7 @@ Analysis = CasesWeather %>%
 
 ```
 
-The basic California model will hypothesize that the Stages of each opening should increase new cases after a week. Similarly, weather should work in a similar pattern. Better weather should encourage more outdoor activity, and we should see a drop in cases up until a certain point. Temperature rises beyond a certain point will have a positive association with new cases as it encourages more indoor activity. 
+The basic California model will hypothesize that the stages of each opening should increase new cases after a week. Similarly, weather should work in a similar pattern. Better weather should encourage more outdoor activity, and we should see a drop in cases up until a certain point. Temperature rises beyond a certain point will have a positive association with new cases as it encourages more indoor activity. 
 
 The first step is to determine the model. The main choices of the model are the lag number. Does the temperature three days prior have a greater influence on new Covid-19 cases than the temperature 13 days prior? Ideally, we would use a log likelihood model. However, the models are not nested, and thus we do not use a log likelihood test. A nested models contains the previous model within it. 
 
@@ -97,7 +100,7 @@ LagModels = purrr::map(as.list(sprintf("%02d", seq(1,14,1))), FindModelLags) %>%
 
 ```
 
-As we can see, the model with a six day lag has the lowest AIC, and it will be the model we evaluate. 
+As we can see, the model with a six day lag has the lowest AIC, and it will be the model we evaluate. The `Mdl` column just tells us whether it is an interaction model or not. The interaction model has an interaction between temperature and precipiation intensity.  
 
 ```{r BestMdl}
 
@@ -137,7 +140,7 @@ LRTestSqr = lmtest::lrtest(FnlMdlIntSqr, FnlMdlNoInt)$`Pr(>Chisq)` %>%
   as_tibble() %>% 
   filter(!is.na(value) )
 
-CheckResiduals = broom::augment(FnlMdlInt) %>% 
+CheckResiduals = broom::augment(FnlMdlIntSqr) %>% 
   ggplot(., aes(x = .fitted, y = .resid)) +
   geom_point() +
   theme_classic()
@@ -149,15 +152,8 @@ Coefs = broom::tidy(FnlMdlIntSqr) %>%
 
 The best model is the model with an interaction, and the second order polynomial. We use a likelihood ratio test, as all three models are nested. 
 
-Finally, in order to check that the model meets the basic assumption of __, we visually check the residuals versus the fitted values. As we can see, there seems to be no correlation. 
 
-```{r ResidCheck}
-
-CheckResiduals
-
-```
-
-After deciding on the model, we use a Bayesian work flow. Unfortunately, there is not enough computing power to check all of the lags.  
+After deciding on the model, we use a Bayesian work flow. Unfortunately, there is not enough computing power to check all of the lags, which is why we previously used a Frequentist work flow.  
 
 The next step is model a prior. Ideally, one can use institutional knowledge to determine the prior. For this modeling exercise, we will use the function `get_prior` from the `brms` package to determine the prior. As a comparison, we also use a weak prior. All of the parameters have been transformed to have a mean of zero, and a standard deviation of one. 
 
@@ -263,9 +259,67 @@ As we can see there is not a considerable difference between the models. The `el
 
 Before looking at the credible intervals, and the mean estimate from the posterior distribution of our two temperature variables, we need to check the chains.
 
+The chains for all of the models can be found [here](https://github.com/kieran11/WeatherCovid/tree/master/CovidAnalysis_files/figure-gfm). There are four trace plots. 
+
 As we can see the chains follow the caterpillar like shapes. 
 
-The posterior distribution for our parameters also look good. 
+The trace are below:
+
+```{r traces}
+
+library(bayesplot)
+
+
+ModelListNms = as.list( 
+  c("CovidBayesianStd","CovidBayesian10","CovidBayesianStdCensus", "CovidBayesian10Census") )
+
+  CreateAllTracePlts = function(x) {
+
+  TraceOut = mcmc_trace(dget("Data/PosteriorDistr") %>% 
+                          filter(Model == x) %>% select(-Model) ,
+             facet_args = list(ncol = 3), 
+             size = .15) +
+    labs(title = paste0("Trace Plots for Model: ", x)) +
+    theme_classic() +
+    theme(legend.position = c(.95, .2))
+
+}
+
+AllTracePlts = purrr::map(ModelListNms,CreateAllTracePlts ) 
+
+```
+
+```{r trace1}
+
+AllTracePlts[[1]]
+
+
+```
+
+
+```{r trace2}
+
+AllTracePlts[[2]]
+
+
+```
+
+
+```{r trace3}
+
+AllTracePlts[[3]]
+
+
+```
+
+
+```{r trace4}
+
+AllTracePlts[[4]]
+
+
+```
+
 
 
 ## Effect of Temperature and Precipitation Intensity
@@ -311,12 +365,83 @@ dput(PosterionDistr, "Data/PosteriorDistr" )
 
 ```
 
-```{r margeffects}
+
+
+When we look at the posterior distribution for the weather variables, we see that the 95% credible intervals include zero for `lag_temperatureMax_06` and `lag_temp_sqr`. The other two weather variables are the interaction between temperature and precipitation intensity, and the lag of precipitation intensity`lag_precipIntensity_06`. The credible intervals for both of these variables exclude zero. 
+
+All of the models can be found [here](https://github.com/kieran11/WeatherCovid/tree/master/CovidAnalysis_files/figure-gfm). 
+
+
+```{r PosteriorParaDistr}
+
+
+CheckMainParamsMnMdl = dget("Data/PosteriorDistr") %>%
+  filter(Model == "CovidBayesianStdCensus") %>% 
+  select(b_lag_temperatureMax_06, b_lag_temp_sqr,  `b_lag_temperatureMax_06:lag_precipIntensity_06`,
+         b_lag_precipIntensity_06 ) %>% 
+  tidyr::gather(Var, Value) 
+
+
+RemoveOutliersMn = CheckMainParamsMnMdl %>% 
+  group_by(Var) %>% 
+  summarise(Lowest = quantile(Value, .025),
+            Highest = quantile(Value, .975)) %>% 
+  ungroup()
+
+MainParamsPltMn = CheckMainParamsMnMdl %>% 
+  inner_join(RemoveOutliersMn, by = "Var") %>% 
+  filter(Value <= Highest & Value >= Lowest) %>% 
+  ggplot(., aes(x = Value, fill = "blue")) +
+  geom_density() + 
+  theme_classic() +
+  geom_hline(yintercept = 0, colour = "white") +
+  facet_wrap(~Var , scales = "free_y") +
+  theme(legend.position = "bottom") +
+  labs(x = "Posterior Parameter Distribution")
+  
+MainParamsPltMn
+
+```
+
+
+
+```{r params}
+
+CheckMainParamsAllMdl = dget("Data/PosteriorDistr") %>%
+  select(b_lag_temperatureMax_06, b_lag_temp_sqr,  `b_lag_temperatureMax_06:lag_precipIntensity_06`,
+         b_lag_precipIntensity_06, Model ) %>% 
+  tidyr::gather(Var, Value, -Model) 
+
+RemoveOutliersAll = CheckMainParamsAllMdl %>% 
+  group_by(Var, Model) %>% 
+  summarise(Lowest = quantile(Value, .025),
+            Highest = quantile(Value, .975)) %>% 
+  ungroup()
+
+MainParamsPltAll = CheckMainParamsAllMdl %>% 
+  inner_join(RemoveOutliersAll, by = c("Var", "Model")) %>% 
+  filter(Value <= Highest & Value >= Lowest) %>% 
+  ggplot(., aes(x = Value, fill = "blue")) +
+  geom_density() + 
+  theme_classic() +
+  geom_hline(yintercept = 0, colour = "white") +
+  facet_wrap(~Var + Model, scales = "free_y") +
+  theme(legend.position = "bottom") +
+  labs(x = "Posterior Parameter Distribution")
+  
+MainParamsPltAll
+
+```
+
+The best model combination was the interaction model, where we modeled an interaction between the max temperature on a given day, and the precipitation intensity. In Statistical Rethinking, Richard McElreath notes that plotting interactions is a much more intuitive method to understand the effect. 
+
+```{r margeffectsall}
 
 CovidME = dget("Data/ConditionalEffects") %>% 
   select(lag_temperatureMax_06 , lag_precipIntensity_06, estimate__, 
          lower__,  upper__, Model) %>% 
   filter(estimate__ >=0) %>% 
+  mutate(lag_precipIntensity_06= factor(lag_precipIntensity_06, levels = c("-1", "0", "1") )) %>% 
   ggplot(., aes(x = lag_temperatureMax_06, y = estimate__)) +
   geom_line() +
   geom_ribbon(aes(ymin=lower__ , ymax=upper__), alpha=0.2) +
@@ -330,86 +455,29 @@ CovidME
 ```
 
 
-```{r PosteriorParaDistr}
+The best model combination was the interaction model, where we modeled an interaction between the max temperature on a given day, and the precipitation intensity. In Statistical Rethinking, Richard McElreath notes that plotting interactions is a much more intuitive method to understand the effect. 
 
 
-CheckMainParams = dget("Data/PosteriorDistr") %>% 
-  select(b_lag_temperatureMax_06,  Model) %>% 
-  group_by(Model) %>% 
-  mutate(rown = row_number() ) %>% 
-  ungroup() %>% 
-  tidyr::spread(Model, b_lag_temperatureMax_06)
+```{r margeffect}
 
-CheckMainParams = dget("Data/PosteriorDistr") %>% 
-  select(b_lag_temperatureMax_06, b_lag_temp_sqr,  `b_lag_temperatureMax_06:lag_precipIntensity_06`,
-         b_lag_precipIntensity_06 , Model) %>% 
-  tidyr::gather(Var, Value, -Model) %>% 
-  ggplot(., aes(x = Value, color = Model)) +
-  geom_density() +
+CovidMEBest = dget("Data/ConditionalEffects") %>% 
+  filter(Model == "CovidBayesianStdCensus" ) %>% 
+  select(lag_temperatureMax_06 , lag_precipIntensity_06, estimate__, 
+         lower__,  upper__) %>% 
+  mutate(lag_precipIntensity_06= factor(lag_precipIntensity_06, levels = c("-1", "0", "1") )) %>% 
+  filter(estimate__ >=0) %>% 
+  ggplot(., aes(x = lag_temperatureMax_06, y = estimate__)) +
+  geom_line() +
+  geom_ribbon(aes(ymin=lower__ , ymax=upper__), alpha=0.2) +
   theme_classic() +
-  facet_wrap(~Var) +
-  theme(legend.position = "bottom") +
-  labs(x = "Posterior Parameter Distribution", colour = "")
-  
-CheckMainParams
+  facet_wrap(~ lag_precipIntensity_06 , ncol = 3) +
+  labs(y = "Estimated New Cases", x= "Lagged Max Temperature")
 
-```
-
-
-```{r traces}
-
-library(bayesplot)
-
-
-ModelListNms = as.list( 
-  c("CovidBayesianStd","CovidBayesian10","CovidBayesianStdCensus", "CovidBayesian10Census") )
-
-  CreateAllTracePlts = function(x) {
-
-  TraceOut = mcmc_trace(dget("Data/PosteriorDistr") %>% 
-                          filter(Model == x) %>% select(-Model) ,
-             facet_args = list(ncol = 3), 
-             size = .15) +
-    labs(title = paste0("Trace Plots for Model: ", x)) +
-    theme_classic() +
-    theme(legend.position = c(.95, .2))
-
-}
-
-AllTracePlts = purrr::map(ModelListNms,CreateAllTracePlts ) 
-
-```
-
-The trace are below:
-
-```{r trace1}
-
-AllTracePlts[[1]]
+CovidMEBest
 
 
 ```
 
 
-```{r trace2}
-
-AllTracePlts[[2]]
-
-
-```
-
-
-```{r trace3}
-
-AllTracePlts[[3]]
-
-
-```
-
-
-```{r trace4}
-
-AllTracePlts[[4]]
-
-
-```
+The plot above shows the interaction effect. When precipitation intensity is one standard deviation below mean, we see that as temperature increases, the estimated new cases rises. However, when precipitation intensity is one standard deviation above the mean, we see opposite. As temperature rises, estimated new cases decline. When precipitation intensity is at the mean, then temperature has little effect on estimated new cases. 
 
